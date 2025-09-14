@@ -1,0 +1,951 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+<title>Catch the Falling Star — Single File Game</title>
+<style>
+  /* =====================
+     Basic layout & theme
+     ===================== */
+  :root{
+    --bg:#0f1724;
+    --panel:#0b1220;
+    --accent:#ffd166;
+    --muted:#9aa6b2;
+    --glass: rgba(255,255,255,0.04);
+    --glass-2: rgba(255,255,255,0.02);
+    --radius:14px;
+    --ui-height:72px;
+    --shadow: 0 6px 18px rgba(2,6,23,0.6);
+    --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+  html,body{height:100%; margin:0; font-family:var(--font); background: radial-gradient(ellipse at 20% 10%, rgba(255,209,102,0.05), transparent 10%), linear-gradient(180deg,#07101a,#07111a 40%, #07111a 100%), var(--bg); color:#e6eef6}
+  .app {
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    box-sizing:border-box;
+  }
+  .card {
+    width:100%;
+    max-width:980px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:18px;
+    padding:18px;
+    box-shadow: var(--shadow);
+    display:grid;
+    grid-template-columns: 1fr 360px;
+    gap:18px;
+  }
+
+  /* Left: Game area */
+  .game-area {
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.06));
+    border-radius:12px;
+    padding:12px;
+    display:flex;
+    flex-direction:column;
+    min-height:520px;
+    position:relative;
+    overflow:hidden;
+  }
+  canvas {
+    width:100%;
+    height:100%;
+    display:block;
+    border-radius:10px;
+    background:
+      radial-gradient(1200px 600px at 10% 10%, rgba(255,255,255,0.02), transparent 10%),
+      linear-gradient(180deg, rgba(3,7,14,0.6), rgba(5,8,12,0.4) 60%, rgba(2,4,8,0.2));
+    box-shadow: inset 0 -40px 80px rgba(0,0,0,0.5);
+  }
+
+  /* Right: Controls / scoreboard */
+  .panel {
+    background: linear-gradient(180deg,var(--panel), rgba(255,255,255,0.01));
+    border-radius:12px;
+    padding:14px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    min-height:520px;
+  }
+  .title {
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .logo {
+    width:54px;
+    height:54px;
+    border-radius:10px;
+    display:grid;
+    place-items:center;
+    font-weight:700;
+    font-size:20px;
+    background: linear-gradient(135deg, var(--accent), #ffd9a8);
+    color:#07101a;
+    box-shadow: 0 6px 14px rgba(255,209,102,0.08);
+  }
+  h1{margin:0; font-size:18px}
+  p.muted {margin:0; color:var(--muted); font-size:13px}
+
+  .stats {
+    display:flex;
+    justify-content:space-between;
+    gap:8px;
+    margin-top:6px;
+  }
+  .stat {
+    background:var(--glass);
+    border-radius:10px;
+    padding:10px;
+    flex:1;
+    text-align:center;
+  }
+  .stat small {display:block; color:var(--muted); font-size:12px}
+  .stat b {display:block; font-size:18px; margin-top:6px}
+
+  .controls {
+    display:flex;
+    gap:8px;
+    flex-direction:column;
+  }
+  .btn-row {display:flex; gap:8px}
+  button.btn {
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border:1px solid rgba(255,255,255,0.04);
+    color:#eaf4ff;
+    padding:10px 14px;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:600;
+    box-shadow: 0 2px 8px rgba(2,6,23,0.6);
+  }
+  button.btn.primary {
+    background: linear-gradient(90deg, #ffd166, #ffb86b);
+    color:#07101a;
+    border:none;
+  }
+  .difficulty-select {display:flex; gap:8px; justify-content:space-between}
+  label.dif {
+    flex:1;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    background:var(--glass-2);
+    padding:8px;
+    border-radius:10px;
+    cursor:pointer;
+    border:1px solid transparent;
+  }
+  label.dif input {display:none}
+  label.dif.selected {border-color:rgba(255,209,102,0.14); box-shadow: 0 4px 14px rgba(0,0,0,0.6)}
+  .small {font-size:13px; color:var(--muted)}
+
+  .instructions {
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+    border-radius:10px;
+    padding:10px;
+    font-size:13px;
+    color:var(--muted);
+  }
+
+  /* On-screen controls (mobile) */
+  .touch-controls {
+    margin-top:auto;
+    display:flex;
+    justify-content:center;
+    gap:12px;
+    align-items:center;
+  }
+  .touch-controls .touch-btn {
+    width:58px;
+    height:58px;
+    border-radius:12px;
+    display:grid;
+    place-items:center;
+    font-weight:700;
+  }
+
+  .hud-top {
+    position:absolute;
+    left:12px;
+    top:12px;
+    display:flex;
+    gap:8px;
+    z-index:40;
+  }
+  .hud-top .mini {
+    background: rgba(0,0,0,0.25);
+    padding:8px 10px;
+    border-radius:10px;
+    font-weight:700;
+    font-size:13px;
+  }
+
+  .overlay {
+    position:absolute;
+    inset:0;
+    display:grid;
+    place-items:center;
+    z-index:50;
+    pointer-events:none;
+  }
+  .overlay .card {
+    pointer-events:auto;
+    width:min(520px,96%);
+    text-align:center;
+    padding:18px;
+    border-radius:12px;
+    background:linear-gradient(180deg, rgba(6,8,12,0.9), rgba(6,8,12,0.75));
+    border:1px solid rgba(255,255,255,0.02);
+  }
+
+  .sr-only { position:absolute !important; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+
+  footer.small {font-size:12px; color:var(--muted); text-align:center; margin-top:6px}
+
+  /* Responsive */
+  @media (max-width:880px){
+    .card { grid-template-columns: 1fr; }
+    .panel { order:2; max-width:100%; }
+    .game-area { min-height:460px; order:1; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <main class="card" role="main">
+    <section class="game-area" aria-label="Game area">
+      <div class="hud-top" aria-hidden="true">
+        <div class="mini" id="livesMini">❤ x3</div>
+        <div class="mini" id="diffMini">Normal</div>
+      </div>
+
+      <canvas id="gameCanvas" width="900" height="600" aria-label="Game canvas"></canvas>
+
+      <!-- Overlay screens -->
+      <div class="overlay" id="overlay">
+        <div class="card" id="startCard" role="dialog" aria-modal="true" aria-labelledby="startTitle">
+          <h2 id="startTitle">Catch the Falling Star</h2>
+          <p class="small">Move the basket left and right to catch stars. Missing a star costs a life.</p>
+
+          <div style="margin:12px 0" class="difficulty-select" role="radiogroup" aria-label="Difficulty">
+            <label class="dif" tabindex="0"><input type="radio" name="difficulty" value="easy" /> Easy</label>
+            <label class="dif selected" tabindex="0"><input type="radio" name="difficulty" value="normal" checked /> Normal</label>
+            <label class="dif" tabindex="0"><input type="radio" name="difficulty" value="hard" /> Hard</label>
+          </div>
+
+          <div style="display:flex; gap:10px; justify-content:center; margin-top:10px">
+            <button class="btn primary" id="playBtn">Play</button>
+            <button class="btn" id="howBtn">How to play</button>
+          </div>
+
+          <p class="small" style="margin-top:10px">High Score: <b id="hsStart">0</b></p>
+        </div>
+
+        <div class="card" id="pauseCard" style="display:none">
+          <h2>Paused</h2>
+          <div style="display:flex; gap:8px; justify-content:center; margin-top:12px">
+            <button class="btn primary" id="resumeBtn">Resume</button>
+            <button class="btn" id="restartBtn">Restart</button>
+          </div>
+        </div>
+
+        <div class="card" id="gameOverCard" style="display:none">
+          <h2 id="overTitle">Game Over</h2>
+          <p class="small" id="finalScore">Score: 0</p>
+          <p class="small">High Score: <b id="finalHigh">0</b></p>
+          <div style="display:flex; gap:8px; justify-content:center; margin-top:12px">
+            <button class="btn primary" id="playAgainBtn">Play Again</button>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <aside class="panel" aria-label="Game controls and stats">
+      <div class="title">
+        <div class="logo" aria-hidden="true">★</div>
+        <div>
+          <h1>Catch the Falling Star</h1>
+          <p class="muted">Responsive • Keyboard • Touch • Local high score</p>
+        </div>
+      </div>
+
+      <div class="stats" aria-hidden="false">
+        <div class="stat" aria-live="polite">
+          <small>Score</small>
+          <b id="score">0</b>
+        </div>
+        <div class="stat" aria-live="polite">
+          <small>High Score</small>
+          <b id="highScore">0</b>
+        </div>
+        <div class="stat" aria-live="polite">
+          <small>Lives</small>
+          <b id="lives">3</b>
+        </div>
+      </div>
+
+      <div class="controls" role="region" aria-label="Game controls">
+        <div class="btn-row">
+          <button class="btn primary" id="startButton">Start</button>
+          <button class="btn" id="pauseButton">Pause</button>
+          <button class="btn" id="resetButton">Restart</button>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center">
+          <label class="small" for="volRange">SFX Volume</label>
+          <input id="volRange" type="range" min="0" max="1" step="0.05" value="0.6" aria-label="volume" style="flex:1" />
+        </div>
+
+        <div class="instructions" id="instructions">
+          <strong>Controls</strong>
+          <ul style="padding-left:18px; margin:8px 0 0 0">
+            <li>Keyboard: ← → or A / D to move.</li>
+            <li>Touch: use on-screen buttons or drag the basket.</li>
+            <li>Catch stars to score. Missing costs a life.</li>
+          </ul>
+        </div>
+
+        <div style="margin-top:6px" class="small">Difficulty: <span id="currentDiff">Normal</span></div>
+
+        <div class="touch-controls" aria-hidden="false" style="margin-top:auto">
+          <button class="btn touch-btn" id="touchLeft" aria-label="move left">◀</button>
+          <div style="min-width:8px"></div>
+          <button class="btn touch-btn" id="touchRight" aria-label="move right">▶</button>
+        </div>
+
+        <footer class="small" style="margin-top:6px">Made with vanilla JS • Press P to Pause</footer>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- =========================
+     Game script (all-in-one)
+     ========================= -->
+<script>
+/* =========================
+   CONFIG (adjust these)
+   ========================= */
+const CONFIG = {
+  canvasWidth: 900,            // base canvas width (scales with CSS)
+  canvasHeight: 600,           // base canvas height
+  basketWidth: 120,            // basket graphic width
+  basketHeight: 30,
+  basketSpeed: 520,            // px per second
+  gravity: 900,                // px per second^2 applied to stars
+  baseStarSpeed: 80,           // initial falling speed (px/s)
+  baseSpawnRate: 1.0,         // stars per second on Normal baseline
+  livesDefault: 3,
+  difficultyPresets: {
+    easy:   { spawnRate: 0.7, baseSpeed: 70, lives: 5, basketSpeed: 480 },
+    normal: { spawnRate: 1.0, baseSpeed: 100, lives: 3, basketSpeed: 520 },
+    hard:   { spawnRate: 1.6, baseSpeed: 140, lives: 2, basketSpeed: 580 }
+  },
+  difficultyRampEvery: 6,      // every N points, increase difficulty slightly
+  rampFactor: 1.08,            // multiply speed/spawn by this each ramp
+  particleCount: 12,
+  maxParticles: 300
+};
+
+/* =========================
+   Utilities & audio (WebAudio)
+   ========================= */
+const AudioSystem = (function(){
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  let masterGain = ctx.createGain();
+  masterGain.gain.value = 0.6;
+  masterGain.connect(ctx.destination);
+
+  function setVolume(v){ masterGain.gain.value = v; }
+
+  function beep(freq=880, time=0.08, type='sine', volume=0.6){
+    const now = ctx.currentTime;
+    const g = ctx.createGain(); g.gain.value = volume;
+    const o = ctx.createOscillator();
+    o.type = type; o.frequency.value = freq;
+    o.connect(g); g.connect(masterGain);
+    o.start(now); o.stop(now + time);
+  }
+
+  function hitSound(){
+    // layered short beeps
+    beep(880, 0.06, 'sine', 0.2);
+    setTimeout(()=>beep(1320, 0.06, 'triangle', 0.14), 40);
+  }
+
+  function missSound(){
+    beep(180, 0.2, 'sawtooth', 0.2);
+  }
+
+  function gameOverSound(){
+    // descending tones
+    let t = 0;
+    [600,420,300].forEach((f,i)=> setTimeout(()=>beep(f,0.15,'sine',0.2), i*140));
+  }
+
+  return { setVolume, hitSound, missSound, gameOverSound, resume: ()=>ctx.resume() };
+})();
+
+/* =========================
+   Canvas & rendering setup
+   ========================= */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+function resizeCanvasToDisplay() {
+  // Scale canvas backing store appropriately for crispness
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(rect.width * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener('resize', resizeCanvasToDisplay);
+resizeCanvasToDisplay();
+
+/* =========================
+   Game state
+   ========================= */
+let game = {
+  running: false,
+  paused: false,
+  score: 0,
+  highScore: 0,
+  lives: CONFIG.livesDefault,
+  difficulty: 'normal',
+  lastSpawn: 0,
+  spawnAccumulator: 0,
+  stars: [],
+  particles: [],
+  lastTime: null,
+  basket: { x: 0, y: 0, vx:0, targetX: null },
+  keys: { left:false, right:false },
+  touchDrag: { active:false, offsetX:0 }
+};
+
+/* =========================
+   Helpers: storage & UI
+   ========================= */
+const UI = {
+  scoreEl: document.getElementById('score'),
+  highScoreEl: document.getElementById('highScore'),
+  livesEl: document.getElementById('lives'),
+  overlay: document.getElementById('overlay'),
+  startCard: document.getElementById('startCard'),
+  pauseCard: document.getElementById('pauseCard'),
+  gameOverCard: document.getElementById('gameOverCard'),
+  playBtn: document.getElementById('playBtn'),
+  hsStart: document.getElementById('hsStart'),
+  currentDiff: document.getElementById('currentDiff'),
+  livesMini: document.getElementById('livesMini'),
+  diffMini: document.getElementById('diffMini'),
+  volRange: document.getElementById('volRange'),
+};
+function loadHighscore(){
+  const v = localStorage.getItem('cfs_highscore');
+  game.highScore = v ? parseInt(v,10) : 0;
+  UI.highScoreEl.textContent = game.highScore;
+  UI.hsStart.textContent = game.highScore;
+  document.getElementById('finalHigh').textContent = game.highScore;
+}
+function saveHighscore(){
+  if(game.score > game.highScore){
+    game.highScore = game.score;
+    localStorage.setItem('cfs_highscore', game.highScore);
+    UI.highScoreEl.textContent = game.highScore;
+  }
+}
+
+/* =========================
+   Gameplay: star & particle constructors
+   ========================= */
+function spawnStar(x, speed){
+  return {
+    x: x,
+    y: -20,
+    r: 12 + Math.random()*8,
+    vy: speed + (Math.random()*40 - 20),
+    rotation: Math.random()*Math.PI*2,
+    spin: (Math.random()-0.5)*3,
+    created: performance.now()
+  };
+}
+function spawnParticle(x,y){
+  return {
+    x, y,
+    vx: (Math.random()-0.5)*260,
+    vy: (Math.random()-1.5)*260,
+    life: 0.6 + Math.random()*0.4,
+    age: 0,
+    size: 2 + Math.random()*3
+  };
+}
+
+/* =========================
+   Input handling
+   ========================= */
+window.addEventListener('keydown', (e)=>{
+  if(e.key === 'ArrowLeft' || e.key === 'a' || e.key==='A') game.keys.left = true;
+  if(e.key === 'ArrowRight' || e.key === 'd' || e.key==='D') game.keys.right = true;
+  if(e.key === 'p' || e.key === 'P') togglePause();
+});
+window.addEventListener('keyup', (e)=>{
+  if(e.key === 'ArrowLeft' || e.key === 'a' || e.key==='A') game.keys.left = false;
+  if(e.key === 'ArrowRight' || e.key === 'd' || e.key==='D') game.keys.right = false;
+});
+
+/* Touch - drag to move basket */
+canvas.addEventListener('touchstart', (ev)=>{
+  const t = ev.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = (t.clientX - rect.left);
+  game.touchDrag.active = true;
+  game.touchDrag.offsetX = x - game.basket.x;
+});
+canvas.addEventListener('touchmove', (ev)=>{
+  if(!game.touchDrag.active) return;
+  ev.preventDefault();
+  const t = ev.touches[0];
+  const rect = canvas.getBoundingClientRect();
+  const x = (t.clientX - rect.left);
+  game.basket.targetX = x - game.touchDrag.offsetX;
+}, { passive:false });
+canvas.addEventListener('touchend', ()=>{ game.touchDrag.active = false; });
+
+/* On-screen buttons */
+document.getElementById('touchLeft').addEventListener('touchstart', (e)=>{ e.preventDefault(); game.keys.left = true; });
+document.getElementById('touchLeft').addEventListener('touchend', (e)=>{ e.preventDefault(); game.keys.left = false; });
+document.getElementById('touchRight').addEventListener('touchstart', (e)=>{ e.preventDefault(); game.keys.right = true; });
+document.getElementById('touchRight').addEventListener('touchend', (e)=>{ e.preventDefault(); game.keys.right = false; });
+
+/* Basket dragging with mouse */
+let isMouseDown = false;
+canvas.addEventListener('mousedown', (ev)=>{
+  const rect = canvas.getBoundingClientRect();
+  const x = ev.clientX - rect.left;
+  const y = ev.clientY - rect.top;
+  // If clicking near basket area, enable drag
+  if(Math.abs(y - game.basket.y) < 80){
+    isMouseDown = true;
+    game.touchDrag.active = true;
+    game.touchDrag.offsetX = x - game.basket.x;
+  }
+});
+window.addEventListener('mousemove', (ev)=>{
+  if(!isMouseDown) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = ev.clientX - rect.left;
+  game.basket.targetX = x - game.touchDrag.offsetX;
+});
+window.addEventListener('mouseup', ()=>{ isMouseDown=false; game.touchDrag.active=false; });
+
+/* Difficulty selection UI */
+document.querySelectorAll('label.dif').forEach(label=>{
+  label.addEventListener('click', ()=>{
+    document.querySelectorAll('label.dif').forEach(l=>l.classList.remove('selected'));
+    label.classList.add('selected');
+    const val = label.querySelector('input').value || label.textContent.trim().toLowerCase();
+    selectDifficulty(val);
+  });
+});
+function selectDifficulty(val){
+  if(!CONFIG.difficultyPresets[val]) val='normal';
+  game.difficulty = val;
+  UI.currentDiff.textContent = val[0].toUpperCase() + val.slice(1);
+  document.getElementById('diffMini').textContent = UI.currentDiff.textContent;
+}
+
+/* Buttons */
+document.getElementById('playBtn').addEventListener('click', ()=>{ startGame(); UI.overlay.style.display='none'; });
+document.getElementById('startButton').addEventListener('click', ()=>{ startGame(); UI.overlay.style.display='none'; });
+document.getElementById('pauseButton').addEventListener('click', ()=>{ togglePause(); });
+document.getElementById('resetButton').addEventListener('click', ()=>{ restartGame(); });
+document.getElementById('resumeBtn').addEventListener('click', ()=>{ togglePause(false); });
+document.getElementById('restartBtn').addEventListener('click', ()=>{ restartGame(); });
+document.getElementById('playAgainBtn').addEventListener('click', ()=>{ restartGame(); UI.overlay.style.display='none'; });
+document.getElementById('howBtn').addEventListener('click', ()=>{ alert('Use arrow keys or A/D to move. On mobile, use on-screen arrows or drag the basket. Catch stars to score. Missing costs a life.'); });
+
+UI.volRange.addEventListener('input', (e)=>{ AudioSystem.setVolume(parseFloat(e.target.value)); });
+
+/* =========================
+   Game lifecycle functions
+   ========================= */
+function initGame(){
+  resizeCanvasToDisplay();
+  loadHighscore();
+  selectDifficulty('normal');
+  resetState();
+}
+function resetState(){
+  const preset = CONFIG.difficultyPresets[game.difficulty] || CONFIG.difficultyPresets.normal;
+  game.score = 0;
+  game.lives = preset.lives;
+  game.stars = [];
+  game.particles = [];
+  game.spawnAccumulator = 0;
+  game.lastTime = null;
+  game.basket.x = (canvas.getBoundingClientRect().width / 2) - CONFIG.basketWidth/2;
+  game.basket.y = canvas.getBoundingClientRect().height - 56;
+  game.basket.vx = 0;
+  game.basket.targetX = null;
+  UI.scoreEl.textContent = game.score;
+  UI.livesEl.textContent = game.lives;
+  UI.livesMini.textContent = '❤ x' + game.lives;
+  UI.highScoreEl.textContent = game.highScore;
+  document.getElementById('finalScore').textContent = 'Score: ' + game.score;
+  document.getElementById('finalHigh').textContent = game.highScore;
+  UI.overlay.style.display = 'grid';
+  showOverlay('startCard');
+}
+
+function startGame(){
+  // ensure audio context resumed (user gesture)
+  AudioSystem.resume();
+  resetState();
+  applyPresetToConfig();
+  game.running = true;
+  game.paused = false;
+  UI.overlay.style.display = 'none';
+  game.lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+function restartGame(){
+  game.running = false;
+  game.paused = false;
+  resetState();
+  applyPresetToConfig();
+  UI.overlay.style.display = 'none';
+  startGame();
+}
+
+function gameOver(){
+  game.running = false;
+  saveHighscore();
+  AudioSystem.gameOverSound();
+  document.getElementById('finalScore').textContent = 'Score: ' + game.score;
+  document.getElementById('finalHigh').textContent = game.highScore;
+  showOverlay('gameOverCard');
+}
+
+function togglePause(forceState){
+  if(!game.running) return;
+  game.paused = (typeof forceState === 'boolean') ? !forceState : !game.paused;
+  if(game.paused){
+    showOverlay('pauseCard');
+  } else {
+    UI.overlay.style.display = 'none';
+    game.lastTime = performance.now();
+    requestAnimationFrame(loop);
+  }
+}
+
+/* Show overlay screens by id */
+function showOverlay(id){
+  ['startCard','pauseCard','gameOverCard'].forEach(k=>{
+    const el = document.getElementById(k);
+    if(k===id) el.style.display='block'; else el.style.display='none';
+  });
+  UI.overlay.style.display = 'grid';
+}
+
+/* Apply difficulty preset to live config state */
+function applyPresetToConfig(){
+  const preset = CONFIG.difficultyPresets[game.difficulty] || CONFIG.difficultyPresets.normal;
+  // apply to dynamic fields
+  CONFIG.baseStarSpeed = preset.baseSpeed;
+  CONFIG.baseSpawnRate = preset.spawnRate;
+  CONFIG.livesDefault = preset.lives;
+  CONFIG.basketSpeed = preset.basketSpeed;
+  game.lives = preset.lives;
+  UI.livesEl.textContent = game.lives;
+  UI.livesMini.textContent = '❤ x' + game.lives;
+}
+
+/* =========================
+   Main game loop
+   ========================= */
+function loop(time){
+  if(!game.running || game.paused) return;
+  if(!game.lastTime) game.lastTime = time;
+  const dt = Math.min(0.05, (time - game.lastTime) / 1000); // clamp dt
+  update(dt);
+  render();
+  game.lastTime = time;
+  requestAnimationFrame(loop);
+}
+
+/* =========================
+   Update: game logic, spawning, collisions
+   ========================= */
+function update(dt){
+  const rect = canvas.getBoundingClientRect();
+  const cw = rect.width, ch = rect.height;
+
+  // move basket from input
+  const inputDir = (game.keys.left ? -1 : 0) + (game.keys.right ? 1 : 0);
+  if(game.basket.targetX !== null){
+    // if touch drag active, snap to target with smoothing
+    const dx = (game.basket.targetX - game.basket.x);
+    game.basket.vx = dx * 10;
+  } else if(inputDir !== 0){
+    game.basket.vx = inputDir * CONFIG.basketSpeed;
+  } else {
+    game.basket.vx = 0;
+  }
+  game.basket.x += game.basket.vx * dt;
+  // clamp
+  game.basket.x = Math.max(10, Math.min(cw - CONFIG.basketWidth - 10, game.basket.x));
+  game.basket.y = ch - 60;
+
+  // spawn logic: accumulate spawn based on spawnRate
+  const spawnRate = CONFIG.baseSpawnRate; // per second
+  game.spawnAccumulator += spawnRate * dt;
+  while(game.spawnAccumulator >= 1.0){
+    // spawn one star
+    const sx = 20 + Math.random() * (cw - 40);
+    const baseSpeed = CONFIG.baseStarSpeed + Math.random()*30 -15;
+    game.stars.push(spawnStar(sx, baseSpeed));
+    game.spawnAccumulator -= 1.0;
+  }
+
+  // ramp difficulty gradually based on score
+  if(game.score > 0 && (game.score % CONFIG.difficultyRampEvery === 0) ){
+    // tiny chance to ramp when we first hit the checkpoint (avoid repeated ramping same frame)
+    if(Math.random() < 0.03){
+      CONFIG.baseStarSpeed *= CONFIG.rampFactor;
+      CONFIG.baseSpawnRate *= CONFIG.rampFactor;
+    }
+  }
+
+  // update stars
+  for(let i = game.stars.length - 1; i >= 0; i--){
+    const s = game.stars[i];
+    s.vy += CONFIG.gravity * dt * 0.001 * 1000; // apply gravity nicely scaled
+    s.y += s.vy * dt;
+    s.rotation += s.spin * dt;
+
+    // check collision with basket
+    const bx = game.basket.x, by = game.basket.y, bw = CONFIG.basketWidth, bh = CONFIG.basketHeight;
+    if(s.y + s.r >= by && s.y - s.r <= by + bh){
+      if(s.x > bx && s.x < bx + bw){
+        // caught
+        game.score += 1;
+        UI.scoreEl.textContent = game.score;
+        AudioSystem.hitSound();
+        // spawn particles
+        for(let p=0;p<CONFIG.particleCount;p++){
+          game.particles.push(spawnParticle(s.x, s.y));
+        }
+        // remove star
+        game.stars.splice(i,1);
+        continue;
+      }
+    }
+
+    // if star missed (fell past bottom)
+    if(s.y - s.r > ch + 20){
+      // remove and deduct life
+      game.stars.splice(i,1);
+      game.lives -= 1;
+      UI.livesEl.textContent = game.lives;
+      UI.livesMini.textContent = '❤ x' + game.lives;
+      AudioSystem.missSound();
+      if(game.lives <= 0){
+        // end game
+        gameOver();
+        return;
+      }
+    }
+  }
+
+  // update particles (sparkle)
+  for(let i = game.particles.length - 1; i >= 0; i--){
+    const p = game.particles[i];
+    p.vy += CONFIG.gravity * 0.001 * 0.6 * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.age += dt;
+    if(p.age >= p.life || game.particles.length > CONFIG.maxParticles){
+      game.particles.splice(i,1);
+    }
+  }
+
+  // persist high score visually
+  if(game.score > game.highScore){
+    UI.highScoreEl.textContent = game.score;
+  }
+
+  // keep arrays reasonable size
+  if(game.stars.length > 200) game.stars.splice(0, game.stars.length - 200);
+}
+
+/* =========================
+   Render: clear & draw
+   ========================= */
+function render(){
+  const rect = canvas.getBoundingClientRect();
+  const cw = rect.width, ch = rect.height;
+
+  // clear
+  ctx.clearRect(0,0,cw,ch);
+
+  // star field background
+  drawBackground(cw,ch);
+
+  // draw stars
+  for(const s of game.stars){
+    drawStar(ctx, s.x, s.y, s.r, s.rotation);
+  }
+
+  // draw particles
+  for(const p of game.particles){
+    const alpha = Math.max(0, 1 - (p.age / p.life));
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255, 214, 102, ${alpha})`;
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // draw basket
+  drawBasket(ctx, game.basket.x, game.basket.y, CONFIG.basketWidth, CONFIG.basketHeight);
+
+  // HUD overlays in canvas (optional subtle)
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(12, 12, 120, 6);
+  ctx.restore();
+}
+
+/* draws a simple stylized star */
+function drawStar(ctx, x, y, r, rot=0){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(rot);
+  // glow
+  const g = ctx.createRadialGradient(0,0,r*0.2,0,0,r*1.2);
+  g.addColorStop(0, 'rgba(255,241,165,0.95)');
+  g.addColorStop(0.45, 'rgba(255,209,102,0.6)');
+  g.addColorStop(1, 'rgba(255,209,102,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0,0,r*1.2,0,Math.PI*2);
+  ctx.fill();
+
+  // star shape
+  ctx.fillStyle = 'rgb(255, 235, 170)';
+  ctx.beginPath();
+  const spikes = 5;
+  const outer = r;
+  const inner = r*0.45;
+  for(let i=0;i<spikes;i++){
+    ctx.lineTo(Math.cos((i*(2*Math.PI)/spikes) - Math.PI/2) * outer, Math.sin((i*(2*Math.PI)/spikes) - Math.PI/2) * outer);
+    ctx.lineTo(Math.cos(((i+0.5)*(2*Math.PI)/spikes) - Math.PI/2) * inner, Math.sin(((i+0.5)*(2*Math.PI)/spikes) - Math.PI/2) * inner);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/* draws stylized basket */
+function drawBasket(ctx, x, y, w, h){
+  ctx.save();
+  // shadow
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.ellipse(x + w/2, y + h + 8, w/2, 12, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // basket body
+  ctx.beginPath();
+  const grd = ctx.createLinearGradient(x, y, x, y + h);
+  grd.addColorStop(0, '#ffb86b');
+  grd.addColorStop(1, '#ff9b3e');
+  ctx.fillStyle = grd;
+  roundRect(ctx, x, y, w, h, 8, true, false);
+
+  // basket top rim
+  ctx.beginPath();
+  ctx.fillStyle = '#ffd166';
+  roundRect(ctx, x+6, y-6, w-12, 12, 6, true, false);
+
+  ctx.restore();
+}
+
+/* drawing helper: rounded rect */
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  if (w < 2 * r) r = w / 2;
+  if (h < 2 * r) r = h / 2;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  if(fill) ctx.fill();
+  if(stroke) ctx.stroke();
+}
+
+/* background starfield & subtle parallax */
+function drawBackground(cw,ch){
+  // faint grid of tiny stars
+  ctx.save();
+  ctx.globalAlpha = 0.12;
+  ctx.fillStyle = 'white';
+  for(let i=0;i<50;i++){
+    const sx = (i * 73) % cw;
+    const sy = (i * 47 + ((Date.now()/200) % 120)) % ch;
+    ctx.beginPath();
+    ctx.arc(sx, sy, ((i % 7) === 0) ? 1.6 : 0.9, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* =========================
+   Start-up
+   ========================= */
+initGame();
+
+/* =========================
+   Utility: small gamepad-ish controls
+   ========================= */
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+/* expose a simple API to change difficulty from console if needed */
+window.CFS = { restart: restartGame, start: startGame, setDiff: selectDifficulty };
+
+/* =========================
+   Keep responsive values in sync with CSS layout
+   ========================= */
+setInterval(()=>{ resizeCanvasToDisplay(); }, 1000);
+
+/* =========================
+   Final housekeeping: update UI highscore from storage initially
+   ========================= */
+loadHighscore();
+
+/* -------------------------
+   Small accessibility tweaks
+   ------------------------- */
+document.querySelectorAll('label.dif').forEach(lbl=>{
+  lbl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' ') lbl.click(); });
+});
+
+/* End of script */
+</script>
+</body>
+</html>
